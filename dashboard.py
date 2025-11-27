@@ -10,9 +10,9 @@ app.config['SECRET_KEY'] = 'montecarlo_secret_key'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # configuración de rabbitmq
-HOST_RABBITMQ = '172.26.167.190' ##
-USUARIO = 'Ale' ##Ale guest
-PASSWORD = 'Ale' ##Ale guest
+HOST_RABBITMQ = '172.26.167.190'
+USUARIO = 'Ale'
+PASSWORD = 'Ale'
 
 # lock para manejar concurrencia entre hilos
 lock = threading.Lock()

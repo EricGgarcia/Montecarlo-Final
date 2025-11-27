@@ -6,9 +6,9 @@ import socket
 from conexion_rabbitmq import ConexionRabbitMQ
 
 # Configuración
-HOST = '172.26.167.190' ## localhost 172.26.167.190
-USER = 'Ale' ##Ale guest
-PASS = 'Ale' ##Ale guest
+HOST = '172.26.167.190'
+USER = 'Ale'
+PASS = 'Ale'
 CLIENTE_ID = str(random.randint(100, 999))
 
 conejo = ConexionRabbitMQ(HOST, USER, PASS)
