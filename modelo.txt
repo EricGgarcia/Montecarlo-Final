@@ -1,0 +1,9 @@
+funcion: retorno = inversion_inicial * (1 + tasa_retorno/100) ** anos - costos_operacion * anos
+
+variables:
+  inversion_inicial: constante(10000)
+  tasa_retorno: normal(media=8, std=3)
+  anos: uniforme(1, 5)
+  costos_operacion: normal(media=500, std=100)
+
+simulaciones: 10000

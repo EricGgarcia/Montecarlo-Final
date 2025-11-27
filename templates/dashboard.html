@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Simulación Montecarlo</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container { max-width: 1400px; margin: 0 auto; }
+        
+        h1 {
+            text-align: center; color: white; margin-bottom: 30px;
+            font-size: 2.2em; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        /* Grid layout para las tarjetas superiores */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card {
+            background: white; border-radius: 15px; padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex; flex-direction: column;
+        }
+        
+        .card h2 {
+            color: #667eea; margin-bottom: 15px; font-size: 1.3em;
+            border-bottom: 3px solid #667eea; padding-bottom: 5px;
+        }
+        
+        .stat-row {
+            display: flex; justify-content: space-between;
+            padding: 8px 0; border-bottom: 1px solid #eee;
+        }
+        
+        .stat-value { color: #667eea; font-weight: bold; }
+        
+        .progress-bar {
+            width: 100%; height: 25px; background: #e0e0e0;
+            border-radius: 15px; overflow: hidden; margin: 15px 0;
+        }
+        
+        .progress-fill {
+            height: 100%; background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.5s ease; display: flex;
+            align-items: center; justify-content: center;
+            color: white; font-weight: bold; font-size: 0.9em;
+        }
+        
+        /* Estilos lista consumidores */
+        .consumidores-scroll {
+            max-height: 250px; overflow-y: auto;
+        }
+
+        .consumidor-item {
+            background: #f8f9fa; padding: 10px; border-radius: 8px;
+            margin: 5px 0; border-left: 4px solid #667eea; font-size: 0.9em;
+        }
+        
+        .status-badge {
+            padding: 2px 8px; border-radius: 10px; font-size: 0.75em; color: white;
+        }
+        .status-active { background: #4caf50; }
+        .status-inactive { background: #ff9800; }
+        
+        /* Estilos Resultados */
+        .full-width { grid-column: 1 / -1; }
+        
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px; margin-bottom: 20px;
+        }
+        
+        .stat-box {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; padding: 10px; border-radius: 10px; text-align: center;
+        }
+        
+        .stat-box-val { font-size: 1.4em; font-weight: bold; }
+        
+        .chart-container { position: relative; height: 300px; }
+        .chart-small { position: relative; height: 200px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard - Simulación Montecarlo</h1>
+        
+        <div class="grid">
+            <div class="card">
+                <h2>Productor</h2>
+                <div class="stat-row">
+                    <span>Generados:</span><span class="stat-value" id="prod-generados">0</span>
+                </div>
+                <div class="stat-row">
+                    <span>Velocidad:</span><span class="stat-value" id="prod-velocidad">0 /s</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="prod-progress" style="width: 0%">0%</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Estado Clientes</h2>
+                <div id="consumidores-lista" class="consumidores-scroll">
+                    <p style="text-align: center; color: #999;">Esperando conexiones...</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Carga de Trabajo</h2>
+                <div class="chart-small">
+                    <canvas id="clientesChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid">
+            <div class="card full-width">
+                <h2>Resultados Globales</h2>
+                
+                <div class="stats-grid">
+                    <div class="stat-box"><div>Total</div><div class="stat-box-val" id="res-total">0</div></div>
+                    <div class="stat-box"><div>Media</div><div class="stat-box-val" id="res-promedio">0</div></div>
+                    <div class="stat-box"><div>Std Dev</div><div class="stat-box-val" id="res-std">0</div></div>
+                    <div class="stat-box"><div>Min</div><div class="stat-box-val" id="res-min">0</div></div>
+                    <div class="stat-box"><div>Max</div><div class="stat-box-val" id="res-max">0</div></div>
+                </div>
+                
+                <div class="chart-container">
+                    <canvas id="histograma"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        
+        // --- 1. Gráfica Histograma (Resultados) ---
+        const ctxHist = document.getElementById('histograma').getContext('2d');
+        const histogramaChart = new Chart(ctxHist, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Frecuencia',
+                    data: [],
+                    backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                    borderColor: 'rgba(102, 126, 234, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        // --- 2. Gráfica Clientes (Nueva) ---
+        const ctxClients = document.getElementById('clientesChart').getContext('2d');
+        const clientesChart = new Chart(ctxClients, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Escenarios',
+                    data: [],
+                    backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                indexAxis: 'y', // Barras horizontales
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { x: { beginAtZero: true } }
+            }
+        });
+
+        // --- SOCKET LISTENERS ---
+
+        // Actualizar Productor
+        socket.on('update_productor', (data) => {
+            document.getElementById('prod-generados').textContent = data.escenarios_generados.toLocaleString();
+            document.getElementById('prod-velocidad').textContent = data.velocidad.toFixed(0) + ' /s';
+            
+            const pct = data.porcentaje.toFixed(1) + '%';
+            const bar = document.getElementById('prod-progress');
+            bar.style.width = pct;
+            bar.textContent = pct;
+        });
+        
+        // Actualizar Consumidores (Lista y Gráfica)
+        socket.on('update_consumidores', (data) => {
+            const lista = document.getElementById('consumidores-lista');
+            lista.innerHTML = '';
+            
+            const labels = [];
+            const values = [];
+
+            for (const [id, stats] of Object.entries(data)) {
+                // Lógica para la lista
+                const isActive = (Date.now()/1000 - stats.timestamp) < 5;
+                const div = document.createElement('div');
+                div.className = 'consumidor-item';
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                        <b>Cliente ${id}</b>
+                        <span class="status-badge ${isActive?'status-active':'status-inactive'}">
+                            ${isActive?'ON':'OFF'}
+                        </span>
+                    </div>
+                    <div>Proc: ${stats.escenarios_procesados} | Vel: ${stats.velocidad.toFixed(1)}/s</div>
+                `;
+                lista.appendChild(div);
+
+                // Datos para la gráfica
+                labels.push(`Cli ${id}`);
+                values.push(stats.escenarios_procesados);
+            }
+
+            // Actualizar gráfica de clientes
+            clientesChart.data.labels = labels;
+            clientesChart.data.datasets[0].data = values;
+            clientesChart.update('none'); // 'none' para animación suave
+        });
+        
+        // Actualizar Resultados
+        socket.on('update_resultados', (data) => {
+            const s = data.estadisticas;
+            document.getElementById('res-total').textContent = s.total.toLocaleString();
+            document.getElementById('res-promedio').textContent = s.promedio.toFixed(2);
+            document.getElementById('res-std').textContent = s.std.toFixed(2);
+            document.getElementById('res-min').textContent = s.min.toFixed(2);
+            document.getElementById('res-max').textContent = s.max.toFixed(2);
+            
+            if (data.histograma && data.histograma.valores.length > 0) {
+                const bins = data.histograma.bins;
+                // Calcular etiquetas intermedias para los bins
+                const lbls = bins.slice(0, -1).map((b, i) => ((b + bins[i+1])/2).toFixed(1));
+                
+                histogramaChart.data.labels = lbls;
+                histogramaChart.data.datasets[0].data = data.histograma.valores;
+                histogramaChart.update('none');
+            }
+        });
+    </script>
+</body>
+</html>
