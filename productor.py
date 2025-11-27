@@ -3,9 +3,9 @@ import random
 from conexion_rabbitmq import ConexionRabbitMQ
 
 # Configuración
-HOST = 'localhost' ##
-USER = 'guest' ##Ale guest
-PASS = 'guest' ##Ale guest
+HOST = '172.26.167.190' ##
+USER = 'Ale' ##Ale guest
+PASS = 'Ale' ##Ale guest
 
 conejo = ConexionRabbitMQ(HOST, USER, PASS)
 conejo.conectar()
